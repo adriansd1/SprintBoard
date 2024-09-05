@@ -1,129 +1,206 @@
+const { useState } = React;
+const { DragDropContext, Droppable, Draggable } = window.ReactBeautifulDnd;
+
 const initialData = {
-    columns: {
-        "column-1": { id: "column-1", title: "To Do", ticketIds: [] },
-        "column-2": { id: "column-2", title: "In Progress", ticketIds: [] },
-        "column-3": { id: "column-3", title: "Done", ticketIds: [] }
+    "columns": {
+        "column-1": {
+            "id": "column-1",
+            "title": "To Do",
+            "ticketIds": []
+        },
+        "column-2": {
+            "id": "column-2",
+            "title": "In Progress",
+            "ticketIds": []
+        },
+        "column-3": {
+            "id": "column-3",
+            "title": "Done",
+            "ticketIds": []
+        }
     },
-    tickets: {},
-    columnOrder: ["column-1", "column-2", "column-3"]
+    "tickets": {},
+    "columnOrder": [
+        "column-1",
+        "column-2",
+        "column-3"
+    ]
 };
 
-function createElement(tag, className, innerText) {
-    const el = document.createElement(tag);
-    if (className) el.className = className;
-    if (innerText) el.innerText = innerText;
-    return el;
-}
+const Board = () => {
+    const [data, setData] = useState(initialData);
 
-function renderBoard() {
-    const root = document.getElementById("root");
-    root.innerHTML = ''; // Clear previous content
-    const boardContainer = createElement('div', 'board-container');
+    const onDragEnd = (result) => {
+        const { destination, source, draggableId } = result;
 
-    initialData.columnOrder.forEach(columnId => {
-        const column = initialData.columns[columnId];
-        const columnElement = renderColumn(column);
-        boardContainer.appendChild(columnElement);
-    });
+        if (!destination) return;
+        if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    root.appendChild(boardContainer);
-}
+        const start = data.columns[source.droppableId];
+        const end = data.columns[destination.droppableId];
 
-function renderColumn(column) {
-    const columnEl = createElement('div', 'column');
-    const title = createElement('div', 'column-title', column.title);
-    const addTicketButton = createElement('button', 'add-ticket-button', '+ Add Ticket');
+        if (start === end) {
+            const newTicketIds = Array.from(start.ticketIds);
+            newTicketIds.splice(source.index, 1);
+            newTicketIds.splice(destination.index, 0, draggableId);
 
-    addTicketButton.addEventListener('click', () => addTicket(column.id));
-    columnEl.appendChild(title);
-    columnEl.appendChild(addTicketButton);
+            const newColumn = {
+                ...start,
+                ticketIds: newTicketIds,
+            };
 
-    const ticketContainer = createElement('div');
-    ticketContainer.addEventListener('dragover', (e) => e.preventDefault());
-    ticketContainer.addEventListener('drop', (e) => dropTicket(e, column.id));
+            setData({
+                ...data,
+                columns: {
+                    ...data.columns,
+                    [newColumn.id]: newColumn,
+                },
+            });
+            return;
+        }
 
-    column.ticketIds.forEach((ticketId) => {
-        const ticket = initialData.tickets[ticketId];
-        const ticketEl = renderTicket(ticket, column.id);
-        ticketContainer.appendChild(ticketEl);
-    });
+        const startTicketIds = Array.from(start.ticketIds);
+        startTicketIds.splice(source.index, 1);
+        const newStart = {
+            ...start,
+            ticketIds: startTicketIds,
+        };
 
-    columnEl.appendChild(ticketContainer);
-    return columnEl;
-}
+        const endTicketIds = Array.from(end.ticketIds);
+        endTicketIds.splice(destination.index, 0, draggableId);
+        const newEnd = {
+            ...end,
+            ticketIds: endTicketIds,
+        };
 
-function renderTicket(ticket, columnId) {
-    const ticketEl = createElement('div', 'ticket');
-    ticketEl.draggable = true;
-    ticketEl.setAttribute('data-ticket-id', ticket.id);
+        setData({
+            ...data,
+            columns: {
+                ...data.columns,
+                [newStart.id]: newStart,
+                [newEnd.id]: newEnd,
+            },
+        });
+    };
 
-    const title = createElement('h4');
-    title.textContent = ticket.title;
-    title.contentEditable = true;
-    title.addEventListener('blur', () => updateTicketTitle(ticket.id, title.textContent));
+    const updateTicket = (ticketId, updatedTicket) => {
+        setData(prevData => ({
+            ...prevData,
+            tickets: {
+                ...prevData.tickets,
+                [ticketId]: {
+                    ...prevData.tickets[ticketId],
+                    ...updatedTicket
+                }
+            }
+        }));
+    };
 
-    const description = createElement('p');
-    description.textContent = ticket.description;
-    description.contentEditable = true;
-    description.addEventListener('blur', () => updateTicketDescription(ticket.id, description.textContent));
+    const addTicket = (columnId) => {
+        const newTicketId = `ticket-${Date.now()}`;
+        const newTicket = { id: newTicketId, title: 'New Ticket', description: 'Description' };
 
-    const actionButtons = createElement('div', 'action-buttons');
-    const deleteButton = createElement('button', 'cancel-button', 'Delete');
+        setData(prevData => {
+            const newColumn = {
+                ...prevData.columns[columnId],
+                ticketIds: [...prevData.columns[columnId].ticketIds, newTicketId]
+            };
 
-    deleteButton.addEventListener('click', () => deleteTicket(ticket.id, columnId));
-    actionButtons.appendChild(deleteButton);
-    ticketEl.appendChild(title);
-    ticketEl.appendChild(description);
-    ticketEl.appendChild(actionButtons);
+            return {
+                ...prevData,
+                tickets: {
+                    ...prevData.tickets,
+                    [newTicketId]: newTicket
+                },
+                columns: {
+                    ...prevData.columns,
+                    [columnId]: newColumn
+                }
+            };
+        });
+    };
 
-    ticketEl.addEventListener('dragstart', (e) => dragTicket(e, ticket.id));
+    const deleteTicket = (ticketId, columnId) => {
+        setData(prevData => {
+            const newTickets = { ...prevData.tickets };
+            delete newTickets[ticketId];
 
-    return ticketEl;
-}
+            const newColumn = {
+                ...prevData.columns[columnId],
+                ticketIds: prevData.columns[columnId].ticketIds.filter(id => id !== ticketId)
+            };
 
-function addTicket(columnId) {
-    const newTicketId = `ticket-${Date.now()}`;
-    const newTicket = { id: newTicketId, title: 'New Ticket', description: 'Description' };
+            return {
+                ...prevData,
+                tickets: newTickets,
+                columns: {
+                    ...prevData.columns,
+                    [columnId]: newColumn
+                }
+            };
+        });
+    };
 
-    initialData.tickets[newTicketId] = newTicket;
-    initialData.columns[columnId].ticketIds.push(newTicketId);
+    const exportToConsole = () => {
+        console.log(JSON.stringify(data, null, 2));
+    };
 
-    renderBoard();
-}
+    return React.createElement(React.Fragment, null,
+        React.createElement("button", { onClick: exportToConsole, style: { marginBottom: '20px', padding: '8px 16px', borderRadius: '4px', border: 'none', backgroundColor: '#2f80ed', color: 'white', cursor: 'pointer' } }, "Print JSON to Console"),
+        React.createElement(DragDropContext, { onDragEnd },
+            React.createElement("div", { className: "board-container" },
+                data.columnOrder.map(columnId => {
+                    const column = data.columns[columnId];
+                    const tickets = column.ticketIds.map(ticketId => data.tickets[ticketId]);
 
-function deleteTicket(ticketId, columnId) {
-    delete initialData.tickets[ticketId];
-    const column = initialData.columns[columnId];
-    column.ticketIds = column.ticketIds.filter(id => id !== ticketId);
+                    return React.createElement(Column, { key: column.id, column, tickets, addTicket, deleteTicket, updateTicket });
+                })
+            )
+        )
+    );
+};
 
-    renderBoard();
-}
+const Column = ({ column, tickets, addTicket, deleteTicket, updateTicket }) => {
+    return React.createElement("div", { className: "column" },
+        React.createElement("div", { className: "column-title" }, column.title),
+        React.createElement("button", { className: "add-ticket-button", onClick: () => addTicket(column.id) }, "+ Add Ticket"),
+        React.createElement(Droppable, { droppableId: column.id },
+            (provided) => React.createElement("div", { ...provided.droppableProps, ref: provided.innerRef },
+                tickets.map((ticket, index) => React.createElement(Ticket, { key: ticket.id, ticket, index, deleteTicket: () => deleteTicket(ticket.id, column.id), updateTicket })),
+                provided.placeholder
+            )
+        )
+    );
+};
 
-function updateTicketTitle(ticketId, newTitle) {
-    initialData.tickets[ticketId].title = newTitle;
-}
+const Ticket = ({ ticket, index, deleteTicket, updateTicket }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState({ title: ticket.title, description: ticket.description });
 
-function updateTicketDescription(ticketId, newDescription) {
-    initialData.tickets[ticketId].description = newDescription;
-}
+    const handleEdit = () => {
+        updateTicket(ticket.id, editForm);
+        setIsEditing(false);
+    };
 
-function dragTicket(event, ticketId) {
-    event.dataTransfer.setData("text/plain", ticketId);
-}
+    return React.createElement(Draggable, { draggableId: ticket.id, index },
+        (provided) => React.createElement("div", { className: "ticket", ref: provided.innerRef, ...provided.draggableProps, ...provided.dragHandleProps },
+            isEditing ? React.createElement("div", null,
+                React.createElement("input", { className: "edit-ticket-input", value: editForm.title, onChange: e => setEditForm({ ...editForm, title: e.target.value }) }),
+                React.createElement("textarea", { className: "edit-ticket-input", value: editForm.description, onChange: e => setEditForm({ ...editForm, description: e.target.value }) }),
+                React.createElement("div", { className: "action-buttons" },
+                    React.createElement("button", { className: "edit-ticket-button", onClick: handleEdit }, "Save"),
+                    React.createElement("button", { className: "cancel-button", onClick: () => setIsEditing(false) }, "Cancel")
+                )
+            ) : React.createElement("div", null,
+                React.createElement("h4", null, ticket.title),
+                React.createElement("p", null, ticket.description),
+                React.createElement("div", { className: "action-buttons" },
+                    React.createElement("button", { className: "edit-ticket-button", onClick: () => setIsEditing(true) }, "Edit"),
+                    React.createElement("button", { className: "cancel-button", onClick: deleteTicket }, "Delete")
+                )
+            )
+        )
+    );
+};
 
-function dropTicket(event, newColumnId) {
-    const ticketId = event.dataTransfer.getData("text/plain");
-    const oldColumnId = findColumnByTicketId(ticketId);
-
-    if (oldColumnId !== newColumnId) {
-        initialData.columns[oldColumnId].ticketIds = initialData.columns[oldColumnId].ticketIds.filter(id => id !== ticketId);
-        initialData.columns[newColumnId].ticketIds.push(ticketId);
-        renderBoard();
-    }
-}
-
-function findColumnByTicketId(ticketId) {
-    return initialData.columnOrder.find(columnId => initialData.columns[columnId].ticketIds.includes(ticketId));
-}
-
-renderBoard();
+ReactDOM.render(React.createElement(Board), document.getElementById('root'));
