@@ -145,6 +145,14 @@ const Board = () => {
         console.log(JSON.stringify(data, null, 2));
     };
 
+    // Add method to window object for exporting JSON
+    window.SprintBoard = {
+        outputJson: () => {
+            console.log(JSON.stringify(data, null, 2));
+            return data;
+        }
+    };
+
     return React.createElement(React.Fragment, null,
         React.createElement("button", { onClick: exportToConsole, style: { marginBottom: '20px', padding: '8px 16px', borderRadius: '4px', border: 'none', backgroundColor: '#2f80ed', color: 'white', cursor: 'pointer' } }, "Print JSON to Console"),
         React.createElement(DragDropContext, { onDragEnd },
